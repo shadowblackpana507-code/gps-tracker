@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Rastreador GPS - Proyecto (Avanzado con Mapa)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --accent: #0b76ef;
+      --muted: #6b7280;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --danger: #ef4444;
+    }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, Arial, sans-serif;
+      background: var(--bg);
+      color: #111827;
+      display: flex;
+      min-height: 100vh;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      width: 1100px;
+      max-width: calc(100% - 40px);
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(15,23,42,0.08);
+      padding: 18px;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 16px;
+    }
+    header h1 {
+      margin: 0 0 6px 0;
+      font-size: 20px;
+    }
+    header p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .panel {
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px;
+      box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+    }
+
+    label { display:block; font-size:13px; margin-top:8px; color:var(--muted); }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 8px 10px;
+      margin-top:6px;
+      border-radius: 8px;
+      border: 1px solid #e6edf3;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+    .row { display:flex; gap:8px; align-items:center; }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.ghost {
+      background: transparent;
+      border: 1px solid #dbeafe;
+      color: var(--accent);
+      font-weight: 600;
+    }
+    button.warn { background: var(--danger); }
+
+    #map { height: 560px; border-radius: 8px; }
+
+    .controls { margin-bottom: 10px; }
+    .list { margin-top: 12px; max-height: 380px; overflow:auto; padding-right:6px; }
+    .item {
+      display:flex; justify-content:space-between; gap:8px;
+      padding:8px; border-radius:8px; align-items:center;
+      border:1px solid #f1f5f9; margin-bottom:8px;
+      background: linear-gradient(180deg,#fff,#fbfdff);
+    }
+    .meta { font-size:12px; color:var(--muted); }
+    .coords { font-family:monospace; font-size:13px; color:#0f172a; }
+    .small { font-size:12px; padding:6px 8px; border-radius:6px; border:1px solid #eef2ff; background:#fff; cursor:pointer; }
+    .actions { display:flex; gap:6px; align-items:center; }
+
+    .footer-note { font-size:12px; color:var(--muted); margin-top:8px; }
+    .top-actions { display:flex; gap:8px; align-items:center; margin-top:10px; }
+    input[type="file"] { display:none; }
+    .import-label { display:inline-block; padding:8px 10px; border-radius:8px; background:#fff; border:1px dashed #e6edf3; cursor:pointer; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="container" role="main">
+    <div>
+      <header>
+        <h1>Rastreador GPS - Proyecto (Avanzado)</h1>
+        <p>Registra ubicaciones, visualízalas en el mapa y administra tu historial (local).</p>
+      </header>
+
+      <section class="panel controls" aria-label="Controles principales">
+        <label for="label">Etiqueta (opcional):</label>
+        <input id="label" type="text" placeholder="Ej: Teléfono de mamá / Reloj niño / Tracker bici">
+
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <div style="flex:1">
+            <label for="lat">Latitud:</label>
+            <input id="lat" type="number" step="any" placeholder="Ej: 9.000000">
+          </div>
+          <div style="flex:1">
+            <label for="lon">Longitud:</label>
+            <input id="lon" type="number" step="any" placeholder="Ej: -79.500000">
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button id="btn-get">Obtener ubicación (GPS)</button>
+          <button id="btn-add" class="ghost">Registrar ubicación</button>
+          <button id="btn-clear" class="warn">Limpiar historial</button>
+        </div>
+
+        <div class="top-actions">
+          <button id="btn-export" class="">Exportar CSV</button>
+          <label for="file-import" class="import-label">Importar CSV</label>
+          <input id="file-import" type="file" accept=".csv" />
+          <button id="btn-sample" class="ghost">Cargar muestras</button>
+        </div>
+
+        <p class="footer-note">Nota: el API Geolocation puede solicitar permisos. Para mejores resultados usa HTTPS.</p>
+      </section>
+
+      <section class="panel" aria-label="Historial">
+        <h3 style="margin:0 0 8px 0">Historial de ubicaciones</h3>
+        <div id="list" class="list" aria-live="polite"></div>
+        <p style="margin-top:10px; color:var(--muted); font-size:13px;">
+          Cada registro guarda etiqueta (si hay), lat/lon, fecha y hora. Puedes centrar el mapa en un registro o eliminarlo.
+        </p>
+      </section>
+    </div>
+
+    <div>
+      <section class="panel" style="padding:10px;">
+        <div id="map"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // ======= Config & estado =======
+    const STORAGE_KEY = 'gps_tracker_entries_v1';
+    let map, markers = {}; // markers: id -> leaflet marker
+    let entries = []; // {id, label, lat, lon, ts}
+
+    // ======= Inicialización del mapa =======
+    function initMap() {
+      map = L.map('map').setView([9.0, -79.5], 8); // Centro inicial: Panamá aproximado
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+    }
+
+    // ======= Utilidades =======
+    function nowISO() {
+      return new Date().toISOString();
+    }
+    function formatLocal(ts) {
+      const d = new Date(ts);
+      return d.toLocaleString();
+    }
+    function uid() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+    }
+
+    // ======= Persistencia =======
+    function saveToStorage() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    }
+    function loadFromStorage() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        entries = JSON.parse(raw) || [];
+      } catch (e) {
+        console.error('Error parseando storage', e);
+        entries = [];
+      }
+    }
+
+    // ======= Render UI =======
+    function renderList() {
+      const listEl = document.getElementById('list');
+      listEl.innerHTML = '';
+      if (entries.length === 0) {
+        listEl.innerHTML = '<p style="color:var(--muted); font-size:13px;">No hay registros aún.</p>';
+        return;
+      }
+      // Mostrar de más reciente a más antiguo
+      const rev = [...entries].sort((a,b) => b.ts.localeCompare(a.ts));
+      for (const e of rev) {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.innerHTML = `
+          <div style="flex:1;">
+            <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+              <div>
+                <div style="font-weight:600;">${e.label ? escapeHtml(e.label) : 'Sin etiqueta'}</div>
+                <div class="meta">${formatLocal(e.ts)}</div>
+              </div>
+              <div class="coords">${Number(e.lat).toFixed(6)}, ${Number(e.lon).toFixed(6)}</div>
+            </div>
+          </div>
+          <div class="actions" style="margin-left:8px;">
+            <button class="small" data-action="center" data-id="${e.id}">Centrar</button>
+            <button class="small" data-action="delete" data-id="${e.id}" style="border-color:#fee2e2;">Eliminar</button>
+          </div>
+        `;
+        listEl.appendChild(item);
+      }
+      // delegación de eventos
+      listEl.querySelectorAll('[data-action="center"]').forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.dataset.id;
+          const entry = entries.find(x => x.id === id);
+          if (!entry) return;
+          map.setView([entry.lat, entry.lon], 16, {animate:true});
+          if (markers[id]) markers[id].openPopup();
+        };
+      });
+      listEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.dataset.id;
+          if (!confirm('Eliminar este registro?')) return;
+          removeEntry(id);
+        };
+      });
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+    }
+
+    // ======= Map markers sync =======
+    function addMarkerForEntry(e) {
+      const marker = L.marker([e.lat, e.lon]).addTo(map)
+        .bindPopup(`<b>${escapeHtml(e.label || 'Sin etiqueta')}</b><br>${formatLocal(e.ts)}<br><small class="coords">${e.lat.toFixed(6)}, ${e.lon.toFixed(6)}</small>`);
+      markers[e.id] = marker;
+    }
+    function removeMarker(id) {
+      if (markers[id]) {
+        map.removeLayer(markers[id]);
+        delete markers[id];
+      }
+    }
+    function refreshMarkers() {
+      // limpiar todos
+      Object.keys(markers).forEach(id => removeMarker(id));
+      for (const e of entries) addMarkerForEntry(e);
+    }
+
+    // ======= CRUD entradas =======
+    function addEntry(label, lat, lon, ts = nowISO(), id = null) {
+      const entry = {
+        id: id || uid(),
+        label: label ? label.trim() : '',
+        lat: Number(lat),
+        lon: Number(lon),
+        ts: ts
+      };
+      entries.push(entry);
+      saveToStorage();
+      addMarkerForEntry(entry);
+      renderList();
+      return entry;
+    }
+
+    function removeEntry(id) {
+      entries = entries.filter(e => e.id !== id);
+      saveToStorage();
+      removeMarker(id);
+      renderList();
+    }
+
+    function clearAll() {
+      if (!confirm('¿Borrar todo el historial? Esta acción es irreversible.')) return;
+      entries = [];
+      saveToStorage();
+      refreshMarkers();
+      renderList();
+    }
+
+    // ======= Geolocation =======
+    function tryGeolocation() {
+      if (!navigator.geolocation) {
+        alert('Geolocation no está disponible en este navegador.');
+        return;
+      }
+      const btn = document.getElementById('btn-get');
+      btn.disabled = true;
+      btn.textContent = 'Solicitando…';
+      navigator.geolocation.getCurrentPosition(pos => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        document.getElementById('lat').value = lat;
+        document.getElementById('lon').value = lon;
+        btn.disabled = false;
+        btn.textContent = 'Obtener ubicación (GPS)';
+        // opcional: centrar
+        map.setView([lat, lon], 15, {animate:true});
+      }, err => {
+        console.error(err);
+        alert('No se pudo obtener la ubicación. Revisa permisos y conexión.');
+        btn.disabled = false;
+        btn.textContent = 'Obtener ubicación (GPS)';
+      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    }
+
+    // ======= CSV Export / Import =======
+    function exportCSV() {
+      if (entries.length === 0) { alert('No hay datos para exportar.'); return; }
+      const rows = [['id','label','lat','lon','ts']];
+      for (const e of entries) {
+        rows.push([e.id, `"${(e.label||'').replace(/"/g,'""')}"`, e.lat, e.lon, e.ts]);
+      }
+      const csv = rows.map(r => r.join(',')).join('\n');
+      const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'gps_tracker_export.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function importCSVFile(file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const text = ev.target.result;
+          parseAndMergeCSV(text);
+          alert('Importación completada.');
+        } catch (e) {
+          console.error(e);
+          alert('Error al importar CSV.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function parseAndMergeCSV(text) {
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length < 2) return;
+      const header = lines[0].split(',').map(h => h.replace(/(^"|"$)/g,'').trim().toLowerCase());
+      // esperados: id,label,lat,lon,ts (en ese orden ideal)
+      for (let i = 1; i < lines.length; i++) {
+        // manejo simple de comillas en label
+        const parts = splitCSVLine(lines[i]);
+        if (parts.length < 5) continue;
+        const [id, labelQuoted, lat, lon, ts] = parts;
+        const label = labelQuoted.replace(/^"(.*)"$/, '$1').replace(/""/g,'"');
+        // evita duplicados por id
+        if (entries.some(e => e.id === id)) continue;
+        addEntry(label, Number(lat), Number(lon), ts, id);
+      }
+      saveToStorage();
+      renderList();
+    }
+
+    function splitCSVLine(line) {
+      const res = [];
+      let cur = '', inQuotes = false;
+      for (let i=0;i<line.length;i++) {
+        const ch = line[i];
+        if (ch === '"' ) {
+          inQuotes = !inQuotes;
+          cur += ch; // mantener para luego limpiar
+        } else if (ch === ',' && !inQuotes) {
+          res.push(cur);
+          cur = '';
+        } else {
+          cur += ch;
+        }
+      }
+      if (cur !== '') res.push(cur);
+      return res;
+    }
+
+    // ======= Muestras rápidas para demo =======
+    function loadSampleData() {
+      const samples = [
+        {label: 'Teléfono A', lat: 8.983333, lon: -79.516667},
+        {label: 'Reloj Niñez', lat: 8.994500, lon: -79.518000},
+        {label: 'Tracker Bicicleta', lat: 9.050000, lon: -79.500000}
+      ];
+      for (const s of samples) addEntry(s.label, s.lat, s.lon);
+      map.setView([samples[0].lat, samples[0].lon], 12);
+    }
+
+    // ======= Eventos UI =======
+    document.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadFromStorage();
+      renderList();
+      refreshMarkers();
+
+      document.getElementById('btn-get').onclick = tryGeolocation;
+
+      document.getElementById('btn-add').onclick = () => {
+        const latEl = document.getElementById('lat');
+        const lonEl = document.getElementById('lon');
+        const label = document.getElementById('label').value;
+        const lat = latEl.value.trim();
+        const lon = lonEl.value.trim();
+        if (lat === '' || lon === '') { alert('Ingresa latitud y longitud válidas (o usa Obtener ubicación).'); return; }
+        const n = addEntry(label, Number(lat), Number(lon));
+        // centrar y abrir popup
+        map.setView([n.lat, n.lon], 15, {animate:true});
+        if (markers[n.id]) markers[n.id].openPopup();
+        // limpiar inputs si quieres:
+        //document.getElementById('label').value = '';
+      };
+
+      document.getElementById('btn-clear').onclick = clearAll;
+      document.getElementById('btn-export').onclick = exportCSV;
+      document.getElementById('file-import').onchange = (ev) => {
+        const f = ev.target.files[0];
+        if (!f) return;
+        if (!confirm('Importar CSV y añadir al historial actual?')) return;
+        importCSVFile(f);
+        ev.target.value = '';
+      };
+      document.getElementById('btn-sample').onclick = loadSampleData;
+
+      // conmutador: cada vez que se añade/borra, guardamos y refrescamos marcadores (ya en addEntry/remove)
+      // pero por seguridad:
+      window.addEventListener('storage', () => {
+        loadFromStorage();
+        refreshMarkers();
+        renderList();
+      });
+    });
+  </script>
+</body>
+</html>
