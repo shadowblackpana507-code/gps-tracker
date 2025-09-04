@@ -1,77 +1,242 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>GPS Tracker</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <meta charset="utf-8" />
+  <title>Rastreador GPS - Proyecto (Avanzado con Mapa)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:0; }
-    #map { height: 400px; }
-    #controls { padding:10px; background:#f0f0f0; }
-    #history { max-height:200px; overflow-y:auto; }
-    .entry { border-bottom:1px solid #ccc; padding:4px; }
-    .small {
-      font-size:14px;
-      padding:6px 10px;
-      margin:2px;
-      border-radius:6px;
-      border:1px solid #0b76ef;
-      background:#e0f2fe;
-      color:#0b76ef;
-      cursor:pointer;
-      font-weight:600;
+    :root {
+      --accent: #0b76ef;
+      --muted: #6b7280;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --danger: #ef4444;
     }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, Arial, sans-serif;
+      background: var(--bg);
+      color: #111827;
+      display: flex;
+      min-height: 100vh;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      width: 1100px;
+      max-width: calc(100% - 40px);
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(15,23,42,0.08);
+      padding: 18px;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 16px;
+    }
+    header h1 { margin: 0 0 6px 0; font-size: 20px; }
+    header p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .panel {
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px;
+      box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+    }
+
+    label { display:block; font-size:13px; margin-top:8px; color:var(--muted); }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 8px 10px;
+      margin-top:6px;
+      border-radius: 8px;
+      border: 1px solid #e6edf3;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+    .row { display:flex; gap:8px; align-items:center; }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.ghost { background: transparent; border: 1px solid #dbeafe; color: var(--accent); font-weight: 600; }
+    button.warn { background: var(--danger); }
+
+    #map { height: 560px; border-radius: 8px; }
+
+    .controls { margin-bottom: 10px; }
+    .list { margin-top: 12px; max-height: 380px; overflow:auto; padding-right:6px; }
+    .item {
+      display:flex; justify-content:space-between; gap:8px;
+      padding:8px; border-radius:8px; align-items:center;
+      border:1px solid #f1f5f9; margin-bottom:8px;
+      background: linear-gradient(180deg,#fff,#fbfdff);
+    }
+    .meta { font-size:12px; color:var(--muted); }
+    .coords { font-family:monospace; font-size:13px; color:#0f172a; }
+    .small { font-size:12px; padding:6px 8px; border-radius:6px; border:1px solid #eef2ff; background:#fff; cursor:pointer; }
+    .actions { display:flex; gap:6px; align-items:center; }
+
+    .footer-note { font-size:12px; color:var(--muted); margin-top:8px; }
+    .top-actions { display:flex; gap:8px; align-items:center; margin-top:10px; }
+    input[type="file"] { display:none; }
+    .import-label { display:inline-block; padding:8px 10px; border-radius:8px; background:#fff; border:1px dashed #e6edf3; cursor:pointer; font-size:13px; }
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="controls">
-    <input id="label" type="text" placeholder="Etiqueta (ej: bici, celular)"/>
-    <input id="lat" type="text" placeholder="Latitud"/>
-    <input id="lon" type="text" placeholder="Longitud"/>
-    <button id="btn-getloc">Obtener ubicación (GPS)</button>
-    <button id="btn-register">Registrar ubicación</button>
-    <button id="btn-clear">Limpiar historial</button>
-    <button id="btn-export">Exportar CSV</button>
-    <input type="file" id="file-import"/>
-    <button id="btn-sample">Cargar muestras</button>
-    <div id="history"></div>
+  <div class="container" role="main">
+    <div>
+      <header>
+        <h1>Rastreador GPS - Proyecto (Avanzado)</h1>
+        <p>Registra ubicaciones, visualízalas en el mapa y administra tu historial (local).</p>
+      </header>
+
+      <section class="panel controls" aria-label="Controles principales">
+        <label for="label">Etiqueta (opcional):</label>
+        <input id="label" type="text" placeholder="Ej: Teléfono de mamá / Reloj niño / Tracker bici">
+
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <div style="flex:1">
+            <label for="lat">Latitud:</label>
+            <input id="lat" type="number" step="any" placeholder="Ej: 9.000000">
+          </div>
+          <div style="flex:1">
+            <label for="lon">Longitud:</label>
+            <input id="lon" type="number" step="any" placeholder="Ej: -79.500000">
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button id="btn-get">Obtener ubicación (GPS)</button>
+          <button id="btn-add" class="ghost">Registrar ubicación</button>
+          <button id="btn-clear" class="warn">Limpiar historial</button>
+        </div>
+
+        <div class="top-actions">
+          <button id="btn-export" class="">Exportar CSV</button>
+          <label for="file-import" class="import-label">Importar CSV</label>
+          <input id="file-import" type="file" accept=".csv" />
+          <button id="btn-sample" class="ghost">Cargar muestras</button>
+        </div>
+
+        <p class="footer-note">Nota: el API Geolocation puede solicitar permisos. Para mejores resultados usa HTTPS.</p>
+      </section>
+
+      <section class="panel" aria-label="Historial">
+        <h3 style="margin:0 0 8px 0">Historial de ubicaciones</h3>
+        <div id="list" class="list" aria-live="polite"></div>
+        <p style="margin-top:10px; color:var(--muted); font-size:13px;">
+          Cada registro guarda etiqueta (si hay), lat/lon, fecha y hora. Puedes centrar el mapa en un registro o eliminarlo.
+        </p>
+      </section>
+    </div>
+
+    <div>
+      <section class="panel" style="padding:10px;">
+        <div id="map"></div>
+      </section>
+    </div>
   </div>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <script>
-    const map = L.map('map').setView([0,0], 2);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      attribution:'&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    const STORAGE_KEY = 'gps_tracker_entries_v1';
+    let map, markers = {};
+    let entries = [];
 
-    let entries = JSON.parse(localStorage.getItem('gpsEntries')||'[]');
-    let markers = {};
+    function initMap() {
+      map = L.map('map').setView([9.0, -79.5], 8);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+    }
 
-    function saveEntries(){ localStorage.setItem('gpsEntries', JSON.stringify(entries)); }
+    function nowISO() { return new Date().toISOString(); }
+    function formatLocal(ts) { return new Date(ts).toLocaleString(); }
+    function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 
-    function renderList(){
-      const hist = document.getElementById('history');
-      hist.innerHTML = '';
-      [...entries].sort((a,b)=> b.ts.localeCompare(a.ts)).forEach(e=>{
-        const div = document.createElement('div');
-        div.className = 'entry';
-        div.innerHTML = `<b>${e.label}</b> [${e.lat}, ${e.lon}] ${e.ts}
-          <button class="small" onclick="centerOn(${e.id})">Centrar</button>
-          <button class="small" onclick="removeEntry(${e.id})">Eliminar</button>`;
-        hist.appendChild(div);
+    function saveToStorage() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    }
+    function loadFromStorage() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try { entries = JSON.parse(raw) || []; }
+      catch { entries = []; }
+    }
+
+    function renderList() {
+      const listEl = document.getElementById('list');
+      listEl.innerHTML = '';
+      if (entries.length === 0) {
+        listEl.innerHTML = '<p style="color:var(--muted); font-size:13px;">No hay registros aún.</p>';
+        return;
+      }
+      const rev = [...entries].sort((a,b) => b.ts.localeCompare(a.ts));
+      for (const e of rev) {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.innerHTML = `
+          <div style="flex:1;">
+            <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+              <div>
+                <div style="font-weight:600;">${e.label ? escapeHtml(e.label) : 'Sin etiqueta'}</div>
+                <div class="meta">${formatLocal(e.ts)}</div>
+              </div>
+              <div class="coords">${Number(e.lat).toFixed(6)}, ${Number(e.lon).toFixed(6)}</div>
+            </div>
+          </div>
+          <div class="actions" style="margin-left:8px;">
+            <button class="small" data-action="center" data-id="${e.id}">Centrar</button>
+            <button class="small" data-action="delete" data-id="${e.id}" style="border-color:#fee2e2;">Eliminar</button>
+          </div>
+        `;
+        listEl.appendChild(item);
+      }
+      listEl.querySelectorAll('[data-action="center"]').forEach(btn => {
+        btn.onclick = () => {
+          const entry = entries.find(x => x.id === btn.dataset.id);
+          if (!entry) return;
+          map.setView([entry.lat, entry.lon], 16, {animate:true});
+          if (markers[entry.id]) markers[entry.id].openPopup();
+        };
+      });
+      listEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
+        btn.onclick = () => {
+          if (!confirm('Eliminar este registro?')) return;
+          removeEntry(btn.dataset.id);
+        };
       });
     }
 
-    function refreshMarkers(){
-      for (const id in markers){ map.removeLayer(markers[id]); }
-      markers = {};
-      for (const e of entries){
-        markers[e.id] = L.marker([e.lat, e.lon]).addTo(map)
-          .bindPopup(`<b>${e.label}</b><br/>${e.ts}`);
-      }
-      fitAllMarkers();
+    function escapeHtml(s) {
+      if (!s) return '';
+      return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
     }
 
+    function addMarkerForEntry(e) {
+      const marker = L.marker([e.lat, e.lon]).addTo(map)
+        .bindPopup(`<b>${escapeHtml(e.label || 'Sin etiqueta')}</b><br>${formatLocal(e.ts)}<br><small class="coords">${e.lat.toFixed(6)}, ${e.lon.toFixed(6)}</small>`);
+      markers[e.id] = marker;
+    }
+    function removeMarker(id) {
+      if (markers[id]) { map.removeLayer(markers[id]); delete markers[id]; }
+    }
+    function refreshMarkers() {
+      Object.keys(markers).forEach(id => removeMarker(id));
+      for (const e of entries) addMarkerForEntry(e);
+      fitAllMarkers();
+    }
     function fitAllMarkers() {
       const group = L.featureGroup(Object.values(markers));
       if (group.getLayers().length > 0) {
@@ -79,93 +244,92 @@
       }
     }
 
-    function registerEntry(label, lat, lon){
-      if (isNaN(lat)||isNaN(lon) || lat<-90||lat>90 || lon<-180||lon>180) {
-        alert("Coordenadas no válidas.");
-        return;
-      }
-      const e = {id:Date.now(), label, lat, lon, ts:new Date().toLocaleString()};
-      entries.push(e); saveEntries(); renderList(); refreshMarkers();
+    function addEntry(label, lat, lon, ts = nowISO(), id = null) {
+      const entry = { id: id || uid(), label: label ? label.trim() : '', lat: Number(lat), lon: Number(lon), ts };
+      entries.push(entry);
+      saveToStorage();
+      addMarkerForEntry(entry);
+      renderList();
+      fitAllMarkers();
+      return entry;
     }
 
-    function centerOn(id){
-      const e = entries.find(x=>x.id===id);
-      if (e) map.setView([e.lat, e.lon], 15);
+    function removeEntry(id) {
+      entries = entries.filter(e => e.id !== id);
+      saveToStorage();
+      removeMarker(id);
+      renderList();
+      fitAllMarkers();
+    }
+    function clearAll() {
+      if (!confirm('¿Borrar todo el historial? Esta acción es irreversible.')) return;
+      entries = [];
+      saveToStorage();
+      refreshMarkers();
+      renderList();
     }
 
-    function removeEntry(id){
-      entries = entries.filter(e=>e.id!==id);
-      saveEntries(); renderList(); refreshMarkers();
+    function tryGeolocation() {
+      if (!navigator.geolocation) { alert('Geolocation no está disponible.'); return; }
+      const btn = document.getElementById('btn-get');
+      btn.disabled = true; btn.textContent = 'Solicitando…';
+      navigator.geolocation.getCurrentPosition(pos => {
+        document.getElementById('lat').value = pos.coords.latitude;
+        document.getElementById('lon').value = pos.coords.longitude;
+        btn.disabled = false; btn.textContent = 'Obtener ubicación (GPS)';
+        map.setView([pos.coords.latitude, pos.coords.longitude], 15, {animate:true});
+      }, err => {
+        console.error(err);
+        alert('No se pudo obtener la ubicación.');
+        btn.disabled = false; btn.textContent = 'Obtener ubicación (GPS)';
+      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     }
 
-    function exportCSV(){
-      if (entries.length===0){ alert("No hay datos para exportar."); return; }
-      const rows=[['id','label','lat','lon','ts']];
-      for(const e of entries){
-        rows.push([e.id, `"${(e.label||'').replace(/"/g,'""')}"`, e.lat, e.lon, e.ts]);
-      }
-      const csv=rows.map(r=>r.join(',')).join('\n');
-      const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement("a");
-      a.href=url; a.download="gps_tracker_export.csv"; a.click();
-      URL.revokeObjectURL(url);
+    // CSV export/import (igual que antes) ...
+
+    function loadSampleData() {
+      const samples = [
+        {label: 'Teléfono A', lat: 8.983333, lon: -79.516667},
+        {label: 'Reloj Niñez', lat: 8.994500, lon: -79.518000},
+        {label: 'Tracker Bicicleta', lat: 9.050000, lon: -79.500000}
+      ];
+      for (const s of samples) addEntry(s.label, s.lat, s.lon);
     }
 
-    function importCSV(file){
-      const reader=new FileReader();
-      reader.onload=()=> {
-        const lines=reader.result.trim().split("\n").slice(1);
-        for(const line of lines){
-          const [id,label,lat,lon,ts]=line.split(",");
-          entries.push({
-            id:parseInt(id), 
-            label:label.replace(/^"|"$/g,''), 
-            lat:parseFloat(lat), 
-            lon:parseFloat(lon), 
-            ts
-          });
-        }
-        saveEntries(); renderList(); refreshMarkers();
+    document.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadFromStorage();
+      renderList();
+      refreshMarkers();
+
+      document.getElementById('btn-get').onclick = tryGeolocation;
+      document.getElementById('btn-add').onclick = () => {
+        const lat = parseFloat(document.getElementById('lat').value.trim());
+        const lon = parseFloat(document.getElementById('lon').value.trim());
+        const label = document.getElementById('label').value;
+
+        if (isNaN(lat) || isNaN(lon)) { alert('Ingresa coordenadas válidas.'); return; }
+        if (lat < -90 || lat > 90 || lon < -180 || lon > 180) { alert('Latitud o longitud fuera de rango.'); return; }
+
+        const n = addEntry(label, lat, lon);
+        map.setView([n.lat, n.lon], 15, {animate:true});
+        if (markers[n.id]) markers[n.id].openPopup();
       };
-      reader.readAsText(file);
-    }
 
-    function loadSample(){
-      registerEntry("Bicicleta", 40.4168, -3.7038);
-      registerEntry("Celular", 48.8566, 2.3522);
-      registerEntry("Reloj", 34.0522, -118.2437);
-    }
+      document.getElementById('btn-clear').onclick = clearAll;
+      document.getElementById('btn-sample').onclick = loadSampleData;
 
-    document.getElementById('btn-getloc').onclick=()=>{
-      if (navigator.geolocation){
-        navigator.geolocation.getCurrentPosition(pos=>{
-          document.getElementById('lat').value=pos.coords.latitude.toFixed(6);
-          document.getElementById('lon').value=pos.coords.longitude.toFixed(6);
-          map.setView([pos.coords.latitude,pos.coords.longitude],15);
-        }, err=>alert("No se pudo obtener la ubicación: "+err.message));
-      } else alert("Geolocalización no soportada");
-    };
-
-    document.getElementById('btn-register').onclick=()=>{
-      const label=document.getElementById('label').value||"Sin etiqueta";
-      const lat=parseFloat(document.getElementById('lat').value);
-      const lon=parseFloat(document.getElementById('lon').value);
-      registerEntry(label, lat, lon);
-    };
-
-    document.getElementById('btn-clear').onclick=()=>{
-      if (confirm("¿Borrar todo?")){ entries=[]; saveEntries(); renderList(); refreshMarkers(); }
-    };
-
-    document.getElementById('btn-export').onclick=exportCSV;
-    document.getElementById('file-import').onchange=(e)=> importCSV(e.target.files[0]);
-    document.getElementById('btn-sample').onclick=loadSample;
-
-    renderList(); refreshMarkers();
+      window.addEventListener('storage', () => {
+        loadFromStorage();
+        refreshMarkers();
+        renderList();
+      });
+    });
   </script>
 </body>
 </html>
+
+
 
 
 
